@@ -1,0 +1,92 @@
+# ===== OpenHuman Swarm — 多 Agent 团队配置 =====
+# 编辑此文件可定义团队和路由规则，无需改框架代码
+
+# Agent 角色池
+agents:
+  chat:
+    display_name: 聊天助手
+    model: deepseek/deepseek-v4-flash
+    persona: "友好的对话助手，擅长日常聊天和简单问答"
+    tools: [web, terminal, file]
+
+  leader:
+    display_name: 项目经理
+    model: deepseek/deepseek-v4-flash
+    persona: |-
+      你是资深项目经理，擅长：
+      1. 分析用户需求，拆解为可执行的子任务
+      2. 分配合适的成员执行
+      3. 汇总各成员结果，合并成最终交付
+      你使用 Shared Context（~/.hermes/swarm/shared/）协调各成员。
+    tools: [web, terminal, file, delegation]
+
+  researcher:
+    display_name: 调研员
+    model: deepseek/deepseek-v4-flash
+    persona: "你是调研专家，擅长信息搜集、资料整理、交叉验证。输出到 shared/ 目录下对应的子任务文件。"
+    tools: [web, file, terminal]
+
+  analyst:
+    display_name: 数据分析师
+    model: longcat/LongCat-Flash-Lite
+    persona: "你是数据分析师，擅长数据处理、图表生成、趋势分析。输出到 shared/ 目录下对应的子任务文件。"
+    tools: [execute_code, web, file]
+
+  writer:
+    display_name: 写手
+    model: longcat/LongCat-Flash-Lite
+    persona: "你是专业写手，擅长内容创作、润色、排版。输出到 shared/ 目录下对应的子任务文件。"
+    tools: [file, web]
+
+# 团队定义
+teams:
+  # 默认单 Agent 聊天
+  default:
+    leader: chat
+    description: 日常聊天模式
+
+  # 调研分析团队
+  research-team:
+    leader: leader
+    members:
+      - researcher
+      - analyst
+      - writer
+    description: "行业调研、数据分析、报告撰写"
+    workflow:
+      breakdown: true        # Leader 先拆任务
+      parallel: true         # 成员并行执行
+      merge: true            # Leader 汇总结果
+      max_iterations: 150
+      completion_timeout: 600
+
+  # 内容生产团队
+  content-team:
+    leader: leader
+    members:
+      - researcher
+      - writer
+    description: "内容创作：调研 → 写作"
+    workflow:
+      breakdown: true
+      parallel: false        # 串行：先调研后写作
+      merge: true
+      max_iterations: 100
+      completion_timeout: 300
+
+# 路由规则（按顺序匹配）
+routes:
+  # 行业分析类
+  - pattern: "分析|调研|研究报告|行业报告|市场"
+    team: research-team
+    priority: 10
+
+  # 内容创作类
+  - pattern: "写文章|写报告|内容|创作|写作|稿件"
+    team: content-team
+    priority: 8
+
+  # 默认路由
+  - pattern: "*"
+    team: default
+    priority: 0
